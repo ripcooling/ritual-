@@ -1,0 +1,181 @@
+import React, { useState, useEffect, useRef } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+
+const baseDeck = [
+  { id: 1, name: "Burger", type: "heal", value: 3, description: "Restore 3 HP." },
+  { id: 2, name: "Shoot", type: "damage", value: 4, description: "Deal 4 damage to opponent." },
+  { id: 3, name: "Gun Powder", type: "buff", value: 0, description: "Double the next Shoot's damage." },
+  { id: 4, name: "Shoot", type: "damage", value: 4, description: "Deal 4 damage to opponent." },
+  { id: 5, name: "Burger", type: "heal", value: 3, description: "Restore 3 HP." },
+  { id: 6, name: "Gun Powder", type: "buff", value: 0, description: "Double the next Shoot's damage." },
+  { id: 7, name: "Milk", type: "milk", value: 0, description: "Permanently halve opponent's damage." },
+];
+
+const GameCard = ({ card }) => (
+  <motion.div
+    className="bg-gray-900 text-white p-4 rounded-2xl shadow-lg w-40"
+    whileHover={{ scale: 1.05 }}
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+  >
+    <h2 className="text-lg font-bold">{card.name}</h2>
+    <p className="text-sm">{card.description}</p>
+    <div className="flex justify-between mt-2 text-sm">
+      <span>Type: {card.type}</span>
+    </div>
+  </motion.div>
+);
+
+const BuckshotRitual = () => {
+  const [health, setHealth] = useState(10);
+  const [opponentHealth, setOpponentHealth] = useState(10);
+  const [hand, setHand] = useState([]);
+  const [board, setBoard] = useState([]);
+  const [opponentBoard, setOpponentBoard] = useState([]);
+  const [message, setMessage] = useState("");
+  const [damageMultiplier, setDamageMultiplier] = useState(1);
+  const [opponentDamageMultiplier, setOpponentDamageMultiplier] = useState(1);
+  const [milkUsed, setMilkUsed] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const opponentTimeout = useRef(null);
+  const cardIdRef = useRef(100);
+
+  const drawCard = () => {
+    const newCard = { ...baseDeck[Math.floor(Math.random() * baseDeck.length)], id: cardIdRef.current++ };
+    setHand(prev => [...prev, newCard]);
+    setMessage("You drew a card.");
+  };
+
+  const playCard = (index) => {
+    const card = hand[index];
+    if (card.type === "heal") {
+      setHealth(h => Math.min(h + card.value, 10));
+      setMessage("You ate a Burger.");
+    } else if (card.type === "damage") {
+      const damage = card.value * damageMultiplier;
+      setOpponentHealth(h => Math.max(h - damage, 0));
+      setMessage(`You fired a Shoot for ${damage} damage.`);
+      setDamageMultiplier(1);
+    } else if (card.type === "buff") {
+      setDamageMultiplier(2);
+      setMessage("Gun Powder activated: Next Shoot is doubled!");
+    } else if (card.type === "milk" && !milkUsed) {
+      setOpponentDamageMultiplier(0.5);
+      setMilkUsed(true);
+      setMessage("You drank Milk: Opponent's damage halved!");
+    }
+    setBoard(prev => [...prev, card]);
+    setHand(prev => prev.filter((_, i) => i !== index));
+
+    if (opponentTimeout.current) clearTimeout(opponentTimeout.current);
+    opponentTimeout.current = setTimeout(() => {
+      opponentPlay();
+    }, 1000);
+  };
+
+  const opponentPlay = () => {
+    const cardPool = baseDeck.filter(card => card.type === "damage" || card.type === "heal");
+    const card = cardPool[Math.floor(Math.random() * cardPool.length)];
+    if (card.type === "heal") {
+      setOpponentHealth(prev => Math.min(prev + card.value, 10));
+      setMessage("Opponent eats a Burger.");
+    } else if (card.type === "damage") {
+      const damage = card.value * opponentDamageMultiplier;
+      setHealth(prev => Math.max(prev - damage, 0));
+      setMessage(`Opponent fires a Shoot for ${damage} damage.`);
+    }
+    setOpponentBoard(prev => [...prev, card]);
+  };
+
+  useEffect(() => {
+    if (health <= 0) {
+      setWinner("Opponent");
+      setGameOver(true);
+    } else if (opponentHealth <= 0) {
+      setWinner("Player");
+      setGameOver(true);
+    }
+  }, [health, opponentHealth]);
+
+  const resetGame = () => {
+    setHealth(10);
+    setOpponentHealth(10);
+    setHand([]);
+    setBoard([]);
+    setOpponentBoard([]);
+    setMessage("");
+    setDamageMultiplier(1);
+    setOpponentDamageMultiplier(1);
+    setMilkUsed(false);
+    setGameOver(false);
+    setWinner(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (opponentTimeout.current) clearTimeout(opponentTimeout.current);
+    };
+  }, []);
+
+  if (gameOver) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
+        <h1 className="text-4xl font-bold mb-4">{winner} Wins!</h1>
+        <Button onClick={resetGame}>Play Again</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-white p-6">
+      <h1 className="text-3xl font-bold mb-4">Buckshot Ritual</h1>
+      <div className="flex items-center gap-6 mb-4">
+        <div>
+          <p className="text-gray-400">Your Health: {health}</p>
+          <p className="text-gray-400">Opponent Health: {opponentHealth}</p>
+        </div>
+        <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-red-900">
+          <img src="/enemy.png" alt="Enemy" className="w-full h-full object-cover" />
+        </div>
+      </div>
+      <p className="text-yellow-500 mb-4">{message}</p>
+
+      <Button className="mb-4" onClick={drawCard}>Draw Card</Button>
+
+      <div className="mb-4">
+        <h2 className="text-xl mb-2">Your Hand</h2>
+        <div className="flex gap-4">
+          {hand.map((card, index) => (
+            <div key={card.id} onClick={() => playCard(index)}>
+              <GameCard card={card} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <h2 className="text-xl mb-2">Spells Played</h2>
+        <div className="flex gap-4">
+          {board.map((card, index) => (
+            <GameCard key={`player-${index}`} card={card} />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-xl mb-2">Opponent Spells</h2>
+        <div className="flex gap-4">
+          {opponentBoard.map((card, index) => (
+            <GameCard key={`enemy-${index}`} card={card} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BuckshotRitual;
